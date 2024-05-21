@@ -1,0 +1,336 @@
+---
+title: "Customer Personality Analysis"
+author: "Surya Eada"
+output: pdf_document
+---
+
+# Introduction
+This project aims to perform a brief analysis of customer data, shedding light on key insights and patterns within the dataset. Through visualization, we will uncover valuable information about customer demographics, purchase behavior, and relationships between variables. The analysis will involve visualizing data using R libraries like ggplot2, GGally, and Plotly, as well as observing correlation among various variables. This project seeks to provide actionable insights for marketing and business strategies, helping organizations make data-driven decisions and enhance their understanding of their target customers.
+
+# Data Description
+## Content
+The dataset for this project, provided by Dr. Omar Romero-Hernandez, offers a comprehensive view of customer attributes, behaviors, and interactions with a company. It is designed to enable customer segmentation and enhance understanding of customer preferences and responses to marketing campaigns.
+
+## Columns used from the dataset
+Income : Income
+
+Education : Level of Education
+
+Marital_Status : Marital Status of the person
+
+MntWines : Amount spent on wine in last 2 years
+
+MntMeatProducts : Amount spent on meat products in last 2 years
+
+MntGoldProds : Amount spent on gold products in last 2 years
+
+MntFishProducts : Amount spent on Fish in last 2 years
+
+MntSweetProducts : Amount spent on Sweet products in last 2 years
+
+MntFruits : Amount spent on Fruits in last 2 years
+
+
+# Importing Dataset
+
+Here I'm importing the dataset that we will bw working on.
+```{r Importing_Dataset}
+df <- read.csv("Downloads/Customer_Personality_Analysis/marketing_campaign.csv",sep = "\t")
+```
+
+
+```{r Loading_Libraries,echo=FALSE,message=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(plotly)
+library(tidyr)
+library(lubridate)
+library(GGally)
+library(RColorBrewer)
+library(gridExtra)
+```
+
+```{r Data_Cleaning,echo=FALSE}
+
+# Check for missing values and calculate percentages
+missing_values <- sapply(df, function(x) mean(is.na(x)) * 100)
+
+# Drop rows with missing values
+df <- na.omit(df)
+
+# Print unique values of 'Education' column and 'Martial_Status' column
+unique_education <- unique(df$Education)
+
+unique_marital_status <- unique(df$Marital_Status)
+
+# Create a copy of the original data frame
+customer_data <- df
+
+# Replace values in the 'Education' column and 'Martial_Status' column
+replace_vals <- c('Graduation', 'Basic', '2n Cycle')
+customer_data$Education <- ifelse(customer_data$Education %in% replace_vals, 'Undergraduate', 'Postgraduate')
+
+replace_vals <- c('Together', 'Married')
+customer_data$Marital_Status <- ifelse(customer_data$Marital_Status %in% replace_vals, 'In relationship', customer_data$Marital_Status)
+
+replace_vals <- c("Alone", "Single")
+customer_data$Marital_Status <- ifelse(customer_data$Marital_Status %in% replace_vals, 'Single', customer_data$Marital_Status)
+
+# Create the "Age" column and define age bins and labels
+current_year <- as.numeric(format(Sys.Date(), "%Y"))
+customer_data$age <- current_year - customer_data$Year_Birth
+age_bins <- c(0, 35, 45, 55, 65, 75, Inf)
+age_labels <- c('Under 35', '35-45', '46-55', '56-65', '66-75', 'Over 75')
+
+# Create the "age_group" column
+customer_data$age_group <- cut(customer_data$age, breaks = age_bins, labels = age_labels, right = FALSE)
+
+# Print unique values of 'Education' column and 'Martial Status' column
+unique_education <- unique(customer_data$Education)
+
+unique_marital_status <- unique(customer_data$Marital_Status)
+
+# Remove unnecessary rows and columns from the data frame
+columns_to_remove <- c('ID', 'Year_Birth', 'Z_CostContact', 'Z_Revenue', 'Complain')
+customer_data <- customer_data[, !(names(customer_data) %in% columns_to_remove)]
+customer_data <- customer_data[customer_data$Marital_Status != 'YOLO', ]
+customer_data <- customer_data[customer_data$Marital_Status != 'Absurd', ]
+customer_data <- customer_data[customer_data$Income <= 200000, ]
+customer_data <- customer_data[customer_data$age <=100, ]
+```
+
+
+# Exploratory Data Analysis
+
+Below, we shall sketch the densities of variables age and income as well as bargraphs to show the number of customers with each unique characteristics.
+
+```{r EDA1,fig.height=3.9,fig.width=3.9,echo=FALSE}
+# Create histograms separately for 'age' and 'Income'
+plot_age <- ggplot(customer_data, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "coral", color = "black", aes(y = after_stat(density))) +
+  geom_density(color = "coral4", linewidth = 1, alpha = 0.5) +  # Add density plot
+  labs(title = "Age Distribution", x = "Age", y = "Density") +
+  theme_minimal()
+print(plot_age)
+
+plot_Income <- ggplot(customer_data, aes(x = Income)) +
+  geom_histogram(binwidth = 5000, fill = "darkolivegreen2", color = "black", aes(y =after_stat(density))) +
+  geom_density(color = "darkgreen", linewidth = 1, alpha = 0.5) +  # Add density plot
+  labs(title = "Income Distribution", x = "Income", y = "Density") +
+  theme_minimal()
+plot_Income + scale_x_continuous(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
+
+
+# Distribution of categorical variables
+ggplot(customer_data, aes(x = Education, fill = Education)) +
+  geom_bar() +
+  labs(title = "Education Distribution", x = "Education", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(customer_data, aes(x = Marital_Status, fill = Marital_Status)) +
+  geom_bar() +
+  labs(title = "Marital Status Distribution", x = "Marital Status", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The graphs below tell us about how the characterstics of the customer base of the company looks like to figure out the target customers for their marketing.
+
+```{r EDA1.1,fig.height=3.9,fig.width=3.9,echo=FALSE}
+# Relationships between variables
+#scatter plot between 'Income' and 'age'
+
+t1 <- ggplot(customer_data, aes(x = Income, y = age, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. Age", x = "Income", y = "Age") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set1")  # Use a color palette from RColorBrewer
+t2 <- ggplot(customer_data, aes(x = Income, y = age, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. Age", x = "Income", y = "Age") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set2")  # Use a color palette from RColorBrewer
+grid.arrange(t1,t2)
+```
+
+The below graphs plot income against the amount of money spent on various commodities offered by the company while also making clear of the characteristics of the customer base. These plots make it easier to see what the target customer base is for each commodity to better market the commodities.
+
+```{r EDA2,fig.height=3.5,fig.width=3.5,echo=FALSE}
+# Relationships between variables
+#scatter plot between Income and Amounts spent on various places
+p1 <- ggplot(customer_data, aes(x = Income, y = MntWines, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntWines", x = "Income", y = "MntWines") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+p2 <- ggplot(customer_data, aes(x = Income, y = MntMeatProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Income vs. MntMeatProducts", x = "Income", y = "MntMeatProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+p3 <- ggplot(customer_data, aes(x = Income, y = MntGoldProds, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntGoldProds", x = "Income", y = "MntGoldProds") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+p4 <- ggplot(customer_data, aes(x = Income, y = MntFishProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Income vs. MntFishProducts", x = "Income", y = "MntFishProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+p5 <- ggplot(customer_data, aes(x = Income, y = MntSweetProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntSweetProducts", x = "Income", y = "MntSweetProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+p6 <- ggplot(customer_data, aes(x = Income, y = MntFruits, color = Education)) +
+  geom_point() +
+  labs(title = "Income vs. MntFruits", x = "Income", y = "MntFruits") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Set3")  # Use a color palette from RColorBrewer
+
+q1 <- ggplot(customer_data, aes(x = Income, y = MntWines, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntWines", x = "Income", y = "MntWines") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+q2 <- ggplot(customer_data, aes(x = Income, y = MntMeatProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Income vs. MntMeatProducts", x = "Income", y = "MntMeatProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+q3 <- ggplot(customer_data, aes(x = Income, y = MntGoldProds, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntGoldProds", x = "Income", y = "MntGoldProds") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+q4 <- ggplot(customer_data, aes(x = Income, y = MntFishProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Income vs. MntFishProducts", x = "Income", y = "MntFishProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+q5 <- ggplot(customer_data, aes(x = Income, y = MntSweetProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Income vs. MntSweetProducts", x = "Income", y = "MntSweetProducts") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+q6 <- ggplot(customer_data, aes(x = Income, y = MntFruits, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Income vs. MntFruits", x = "Income", y = "MntFruits") +
+  scale_x_continuous(labels = scales::comma) +  # Format x-axis labels if needed
+  scale_color_brewer(palette = "Paired")  # Use a color palette from RColorBrewer
+grid.arrange(p1,q1)
+grid.arrange(p2,q2)
+grid.arrange(p3,q3)
+grid.arrange(p4,q4)
+grid.arrange(p5,q5)
+grid.arrange(p6,q6)
+```
+
+The below graphs plot age against the amount of money spent on various commodities offered by the company while also making clear of the characteristics of the customer base. These plots make it easier to see what the target customer base is for each commodity to better market the commodities.
+
+```{r EDA2.1,fig.height=3.5,fig.width=3.5,echo=FALSE}
+r1 <- ggplot(customer_data, aes(x = age, y = MntWines, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntWines", x = "age", y = "MntWines") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+r2 <- ggplot(customer_data, aes(x = age, y = MntMeatProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntMeatProducts", x = "age", y = "MntMeatProducts") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+r3 <- ggplot(customer_data, aes(x = age, y = MntGoldProds, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntGoldProds", x = "age", y = "MntGoldProds") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+r4 <- ggplot(customer_data, aes(x = age, y = MntFishProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntFishProducts", x = "age", y = "MntFishProducts") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+r5 <- ggplot(customer_data, aes(x = age, y = MntSweetProducts, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntSweetProducts", x = "age", y = "MntSweetProducts") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+r6 <- ggplot(customer_data, aes(x = age, y = MntFruits, color = Education)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntFruits", x = "age", y = "MntFruits") +
+  scale_color_brewer(palette = "Accent")  # Use a color palette from RColorBrewer
+
+s1 <- ggplot(customer_data, aes(x = age, y = MntWines, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntWines", x = "age", y = "MntWines") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+s2 <- ggplot(customer_data, aes(x = age, y = MntMeatProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntMeatProducts", x = "age", y = "MntMeatProducts") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+s3 <- ggplot(customer_data, aes(x = age, y = MntGoldProds, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntGoldProds", x = "age", y = "MntGoldProds") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+s4 <- ggplot(customer_data, aes(x = age, y = MntFishProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntFishProducts", x = "age", y = "MntFishProducts") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+s5 <- ggplot(customer_data, aes(x = age, y = MntSweetProducts, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntSweetProducts", x = "age", y = "MntSweetProducts") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+s6 <- ggplot(customer_data, aes(x = age, y = MntFruits, color = Marital_Status)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. MntFruits", x = "age", y = "MntFruits") +
+  scale_color_brewer(palette = "Dark2")  # Use a color palette from RColorBrewer
+grid.arrange(r1,s1)
+grid.arrange(r2,s2)
+grid.arrange(r3,s3)
+grid.arrange(r4,s4)
+grid.arrange(r5,s5)
+grid.arrange(r6,s6)
+
+```
+
+## THE CORRELATION MATRIX
+
+The below table shows the correlation between various variables to better understand the customers.
+
+```{r EDA3,fig.height=4,fig.width=7,echo=FALSE}
+# Correlation matrix for numerical variables
+numerical_vars <- select(customer_data, c("Income", "age", "MntWines","MntMeatProducts","MntGoldProds","MntFishProducts","MntSweetProducts","MntFruits"))
+correlation_matrix <- cor(numerical_vars)
+print(correlation_matrix) 
+```
+
+## THE PAIR PLOT and HEATMAP OF NUMERICAL VARIABLES
+The below pair plot and the heatmap helps us understand the correlation between the variables much easier
+
+```{r EDA3.1,fig.height=4,fig.width=7,echo=FALSE}
+
+
+# Create a pairs plot of the numerical variables.
+ggpairs(numerical_vars,
+        aes(alpha = 0.01))
+
+
+# Correlation heatmap
+corrplot(correlation_matrix, method = "color")
+
+```
+
+
+# Results
+
+1. The majority of customers are between the ages of 40 and 60.
+2. The majority of customers earn between 25000 and 75000.
+3. The majority of customers are in a relationship.
+4. Less customers have finished their postgraduation in comparision to the customers who only completed their undergraduation.
+5. We can observe that Post graduates spend more on wine and meat than on fish,fruits,sweets, and gold.
+6. We can also observe that Post graduates over 60 years old tend to buy more than Post graduates below 60.
+7. Customers with Income over 25000 seems to be spending considerably higher compared to ones below 25000.
+8. Wine and Meat seems to be the major contributors in terms of amount spent.
+9. Meat seems to have a significant correspondance with all other commodities except gold, while Wine seems to have a significant correspondance with only meat.
+
+# Conclusion
+
+It appears evident that the company should primarily target individuals in relationships who fall within the age range of 40 to 60. The company's marketing efforts should be concentrated on the income bracket of $25,000 to $75,000. However, if the company believes that the market for this income group is saturated, they could consider redirecting their marketing efforts towards either higher or lower income brackets. This could be achieved by offering a budget-friendly section to cater to customers with lower incomes or by promoting luxury commodities for those with higher incomes.
+
+Additionally, the company should focus its marketing efforts on its popular products, such as wine and meat, unless the market for these products has reached its saturation point. In such a case, they should shift their attention to fish, sweets, and fruits, which exhibit a significant correlation with other commodities. However, there is no urgent need to emphasize gold yet, as the amount spent on gold by customers is nearly equal to that of other commodities, while its correlation with other commodities is relatively lower.
